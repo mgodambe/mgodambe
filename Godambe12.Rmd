@@ -1,0 +1,29 @@
+---
+title: "MayaDag"
+author: "Maya S. Godambe"
+date: "2022-10-17"
+output: html_document
+---
+```{r}
+# Loading Packages necessary for analyzing data
+library(readr) 
+library(package = "tidyverse")
+library(package = "table1")
+library(package = "descr")
+library(package = "lsr")
+require(SASxport)
+library(foreign)
+library(dplyr)
+```
+
+```{r}
+#Loading data from git up repository use "read_csv" command. Data titled "titanic"
+titanic<-read_csv("https://raw.githubusercontent.com/kijohnson/Data/main/titanic.csv")
+
+#RECODE CLASS AS A FACTOR with levels, 1,2, and 3
+titanic1 <- titanic %>%
+  mutate(Pclass = recode_factor(.x = Pclass,
+                                '1' = '1',
+                                '2' = '2',
+                                '3' = '3')) 
+```

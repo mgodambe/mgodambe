@@ -43,6 +43,12 @@ ggplot(data = titanic1, aes(x = Pclass, y = Age),
   labs(x = "Class of Passengers", y = "Age (years)",  title = "Boxplot 1. Class by Age ")
 ```
 
+```{r}
+# using the dplyr package, finding percentage of males and females by class
+titanic1 %>% 
+    group_by(Pclass, Sex) %>%
+    summarise( percent = 100 * n() / nrow(titanic))
+```
 
 
 

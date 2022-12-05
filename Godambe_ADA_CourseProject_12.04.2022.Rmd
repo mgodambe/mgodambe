@@ -1,0 +1,308 @@
+---
+title: "ADA Project_Godambe 12.02.22"
+author: "Maya S. Godambe"
+output: pdf_document
+always_allow_html: true
+---
+######################################################
+# Project: Forzen Meals, Education and Income
+# Author: Maya S. Godambe 
+# Edit date: December 02,2022
+# Data:((<https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/DBQ_J.htm>)), ((<https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/DEMO_J.htm>))
+#########################################################
+
+```{r setup, include=FALSE}
+#Loading packages
+pacman::p_load(stargazer, DiagrammeR, table1, car, sandwich, MASS, dplyr, lmtest, SMPracticals, ggplot2, writexl, broom, stats,tidyr, foreign)
+
+#loading XPT files from NHANES website
+demo <- read.xport("DEMO_J.XPT")
+foodies <- read.xport("DBQ_J.XPT")
+
+#Combining XPT files into dataset
+nhanes<- cbind(demo,foodies)
+```
+
+
+```{r clean data, include = FALSE}
+#Piping data and cleaning
+nhanes2018 <- nhanes%>%
+dplyr::select(RIAGENDR, RIDRETH3,DBD910,RIDAGEYR,INDFMIN2, DMDEDUC2)%>%
+ mutate(RIAGENDR = recode_factor(.x = RIAGENDR,
+                                '1' = ' Male',
+                                '2' = ' Female',
+                                '7' = NA_character_,
+                                '9' = NA_character_))%>%
+    rename(gender = RIAGENDR)%>%
+  
+  # Recoding race as a factor, and renaming as race
+ mutate(RIDRETH3 = recode_factor(.x = RIDRETH3,
+                                '1' = ' Hispanic',
+                                '2' = ' Hispanic',
+                                '3' = ' White',
+                                '4' = ' Black',
+                                '6' = ' Asian',
+                                '7' = ' Other Race - Including Multi-Racial',
+                                '.' = NA_character_))%>%
+    rename(race= RIDRETH3)%>%
+  
+# Recoding as a factor and renaming as income
+# How to distribute the income levels in Figure 2. ((<https://sgp.fas.org/crs/misc/R44705.pdf>))
+   mutate(INDFMIN2 = recode_factor(.x = INDFMIN2,
+                                '1' = ' $0 to $24,999', 
+                                '2' = ' $0 to $24,999',
+                                '3' = ' $0 to $24,999',
+                                '4' = ' $0 to $24,999', 
+                                '5' = ' $0 to $24,999', 
+                                '6' = ' $25,000 to $54,999',
+                                '7' = ' $25,000 to $54,999',
+                                '8' = ' $25,000 to $54,999', 
+                                '9' = ' $55,000 to $74,999',
+                                '10' = ' $55,000 to $74,999', 
+                                '12' = NA_character_,
+                                '13' = NA_character_, 
+                                '14' = ' $75,000 to $99,999', 
+                                '15' = ' $100,000 and over', 
+                                '77' = NA_character_, 
+                                '99' = NA_character_)) %>%
+    rename(income = INDFMIN2)%>%
+  
+# Recoding as a factor and labeling as education
+   mutate(DMDEDUC2 = recode_factor(.x = DMDEDUC2,
+                                '1' = ' Less than 9th grade',
+                                '2' = ' 9-12th grade no diploma',
+                                '3' = ' High school graduate/GED or equivalent',
+                                '4' = ' Some college or AA degree',
+                                '5' = ' College graduate or above',
+                                '7' = NA_character_,
+                                '9' = NA_character_,
+                                '.' = NA_character_))%>%
+  rename(education = DMDEDUC2) %>%
+
+
+ # Renaming age (years) 
+rename(age= RIDAGEYR) 
+
+# Looking at the numbe of na's in data set after recoding
+sum(is.na(nhanes2018))
+
+```
+
+```{r removing counts of frozen meals (DBD910) higher than 60}
+# Removing count of frozen meals that are greater than 60. For health 
+# and ethical concerns. I am not a doctor nor public health professional yet.
+
+nhanes2018 <- nhanes2018%>%
+mutate(DBD910 = na_if(x = DBD910, y = "0"))%>%
+mutate(DBD910 = na_if(x = DBD910, y = "6666"))%>%
+mutate(DBD910 = na_if(x = DBD910, y = "9999"))%>%
+mutate(DBD910 = na_if(x = DBD910, y = "90"))%>%
+mutate(DBD910 = na_if(x = DBD910, y = "80"))%>%
+mutate(DBD910 = na_if(x = DBD910, y = "60"))%>%
+
+# Renaming as frozen
+rename(frozen = DBD910) 
+```
+
+
+
+```{r removing rows with NA for any variable}
+#Removing NA rows
+nhanes2018$frozen<- as.numeric(nhanes2018$frozen)
+
+# omitting any observations with na's in the data set (do not do this in the futrue)
+nhanes.clean <- na.omit(nhanes2018)
+
+# Summarizing the counts of data
+summary(nhanes.clean)
+
+```
+# Figure 1. Logic Model for data selection/exclusion
+
+```{r Figure 1. Logic model for data selection/exclusion}
+#Figure 1 Logic model for data selection/exclusion
+grViz("digraph flowchart {
+
+      tab1 [label = '@@1'] # starting
+      tab2 [label = '@@2'] # exclusion 1
+      tab3 [label = '@@3'] # exclusion 2
+      tab1 -> tab2 -> tab3
+}
+      [1]: 'Records received from NHANES 2017-2018 with answers for demographics and nutrition questions n= 9,254'
+      [2]: 'Excluding 44 individuals who have eaten 60 or more frozen meals/pizza in the past 30 days n = 9,210'
+      [3]:'Excluding 7,524 individuals with missing data on variables used in the analysis n= 1,686'
+      ")
+
+```
+#Table 1.
+
+```{r table 1}
+# Adding labels to the variable on the table
+label(nhanes.clean$income) <- "Annual Household Income"
+label(nhanes.clean$gender)<-"Gender"
+label(nhanes.clean$race)<-"Race"
+label(nhanes.clean$education)<-"Education"
+label(nhanes.clean$age)<-"Age"
+label(nhanes.clean $frozen) <- "Number of frozen meals/pizza in past 30 days"
+
+# Using table one to visualize distribution of variables
+table1(~ gender + frozen + age + race + education + income,overall="Total",
+       footnote='SD = standard deviation',
+       render.missing = NULL,
+       data = nhanes.clean,
+       caption = "Table 1.  (n = 1686; NHANES 2017-2018)")
+```
+#Checking assumptions
+
+```{r assumptions}
+# Check shape of distribution of counts of cases using density plot and histogram
+# data is right skewed and observations are independent
+ggplot(nhanes.clean, aes(frozen))+
+    geom_histogram(breaks=c(0,2,4,6,8,9,10,12,14,16,18,20,22,24,26,28,30:90), 
+                   color="black", fill="red")
+
+#The Mean does not equal the variance thus, negative binomial will be used.
+mean(nhanes.clean$frozen)
+var(nhanes.clean$frozen)
+```
+The Mean does not equal the variance (overdispersion), thus negative binomial
+
+# Visualization of Varibales
+```{r ditribution of age and number of frozen meals eaten}
+# Creating scatter plot to check the distribution of age by number of frozen meals
+nhanes.clean%>%
+ggplot(aes(x= frozen, y = age)) + 
+      geom_point(alpha=1) +
+    theme(legend.position="none",plot.title = element_text(size=10)) +
+    labs(x ="Number of Frozen Meals/Pizza eaten in the past 30 days" , y = 
+           "Age (years)",
+       title = "Figure 2. Number of frozen meals by highest level of 
+       education (n = 1686; NHANES 2017-2018)") 
+```
+```{r box plots of distribution of different variables with outcome}
+# Using ggplot2 Figure 3. Boxplot (Race with Number of Forzen meals eaten in the past 30 days)
+ggplot(nhanes.clean, aes(x=race, y=frozen, fill=race)) + 
+    geom_boxplot(alpha=1) +
+    theme(legend.position="none",plot.title = element_text(size=10)) +
+    scale_fill_brewer(palette="OrRd") +
+  labs(y ="Number of Frozen Meals/Pizza eaten in the past 30 days" , x = "Race",
+       title = "Figure 3. Number of frozen meals by race n = 1686") +
+  stat_boxplot(geom ='errorbar', width = 0.6) 
+# Using ggplot2 Figure 4. Boxplot (Gender with Number of Forzen meals eaten in the past 
+# 30 days)
+ggplot(nhanes.clean, aes(x=gender, y=frozen, fill=gender)) + 
+    geom_boxplot(alpha=1) +
+    theme(legend.position="none",plot.title = element_text(size=10)) +
+    scale_fill_brewer(palette="OrRd") +
+labs(y ="Number of Frozen Meals/Pizza eaten in the past 30 days" , x = "Gender",
+       title = "Figure 4. Number of frozen meals by gender n = 1686") +
+    stat_boxplot(geom ='errorbar', width = 0.6) 
+
+# Using ggplot2 Figure 5. Boxplot (Income with Number of Forzen meals eaten in the past 
+# 30 days)
+ggplot(nhanes.clean, aes(x=income, y=frozen, fill=income)) + 
+    geom_boxplot(alpha=1) +
+    theme(legend.position="none",plot.title = element_text(size=10)) +
+    scale_fill_brewer(palette="OrRd") +
+  coord_flip() +
+   labs(y ="Number of Frozen Meals/Pizza eaten in the past 30 days" , x = 
+          "Household income",
+       title = "Figure . Number of frozen meals by household income n = 1686") +
+    stat_boxplot(geom ='errorbar', width = 0.6) 
+
+# Using ggplot2 Figure 6. Boxplot (Education with Number of Forzen meals eaten in the past
+# 30 days)
+ggplot(nhanes.clean, aes(x=education, y=frozen, fill=education)) + 
+    geom_boxplot(alpha=1) +
+    theme(legend.position="none",plot.title = element_text(size=10)) +
+    scale_fill_brewer(palette="OrRd") +
+  coord_flip() +
+  labs(y ="Number of Frozen Meals/Pizza eaten in the past 30 days" , x = 
+         "Highest Level of education",
+       title = "Figure 6. Number of frozen meals by highest level of education 
+       n = 1686") +
+    stat_boxplot(geom ='errorbar', width = 0.6) 
+
+```
+
+
+
+# Comparing Poisson Model against Negative Binomial
+```{r indivudal models without cofactors}
+# Unadjusted Poisson and negative binomial model of income and number of frozen meals/pizza's eaten in the past 30 days
+summary(model.P <- glm(frozen ~ income ,  family = poisson, data =  nhanes.clean)) 
+summary(model.2 <- glm.nb(model.1 <- glm(frozen ~ income , data = nhanes.clean)))
+
+ # Unadjusted Poisson and negative binomial model of highest level of education and number of frozen meals/pizza's eaten in the past 30 days
+summary(model.E <- glm(frozen ~ education ,  family = poisson, data =  nhanes.clean)) 
+summary(model.3 <- glm.nb(model.1 <- glm(frozen ~ education , data = nhanes.clean)))
+```
+```{r likelihood ratio tests}
+#run lrtest to compare models
+lrtest(model.P, model.2)
+lrtest(model.E, model.3)
+```
+The logliklihood and the significant p-value suggest that the negative binomial model is better and that there is overdispersion. (Not statistically equivalent)
+
+# Full Model and colinearity test
+```{r full model}
+# Full negative binomial model adjusting for age, gender and race 
+# technically education can confound income and vice versa
+summary(model.genderageraceedu <- glm.nb(model.genderagerace <- glm(frozen ~ 
+            income + education + gender + age + race , data = nhanes.clean)))
+
+# Checking for multicolinearity
+vif(model.genderageraceedu)
+#VIF are less than 10. No indication of colinearity from this method.
+```
+
+# Exponentiating Models
+```{r summary for indivudal models}
+# Printing non-adjusted models with 95% CI and Incident rates
+tidy(model.2, conf.int=TRUE, exponentiate = TRUE)
+tidy(model.3, conf.int=TRUE, exponentiate = TRUE)
+
+# Printing full model adjusted for age race, gender and education
+tidy(model.genderageraceedu, conf.int=TRUE, exponentiate = TRUE)
+
+
+# Main finding: As education and income increases, number of frozen meals/ pizzas decreases.
+```
+
+# Code for presentable tables, thank you Josh L. 
+
+```{r presentable table 2, results='asis'}
+library(xtable)
+full.summ = summary(model.genderageraceedu)
+full.summ.coef = coef(full.summ)
+full.summ.conf = confint(model.genderageraceedu)
+full.summ.bind = cbind(full.summ.coef, full.summ.conf)
+full.summ.rr = cbind(exp(full.summ.bind[,c(1, 5, 6)]), full.summ.bind[,4])
+colnames(full.summ.rr) = c('IRR', '2.5%', '97.5%', 'p-value')
+full.table = xtable(full.summ.rr)
+print(full.table, type = 'latex')
+```
+
+```{r presentable table 3,results='asis'}
+library(xtable)
+full.summ.2 = summary(model.2)
+full.summ.coef.2 = coef(full.summ.2)
+full.summ.conf.2 = confint(model.2)
+full.summ.bind.2 = cbind(full.summ.coef.2, full.summ.conf.2)
+full.summ.rr.2 = cbind(exp(full.summ.bind.2[,c(1, 5, 6)]), full.summ.bind.2[,4])
+colnames(full.summ.rr.2) = c('IRR', '2.5%', '97.5%', 'p-value')
+full.table.2 = xtable(full.summ.rr.2)
+print(full.table.2, type = 'latex')
+```
+
+```{r presentable table 4 ,results='asis'}
+full.summ.3 = summary(model.3)
+full.summ.coef.3 = coef(full.summ.3)
+full.summ.conf.3 = confint(model.3)
+full.summ.bind.3 = cbind(full.summ.coef.3, full.summ.conf.3)
+full.summ.rr.3 = cbind(exp(full.summ.bind.3[,c(1, 5, 6)]), full.summ.bind.3[,4])
+colnames(full.summ.rr.3) = c('IRR', '2.5%', '97.5%', 'p-value')
+full.table.3 = xtable(full.summ.rr.3)
+print(full.table.3, type = 'latex')
+```
+
